@@ -35,6 +35,8 @@ Install the packages using requirements.txt file on the virtual environment.
 pip install -r requirements.txt
 ```
 
+## Execution
+
 Run the app using below command.
 ```
 python flask_app.py
@@ -46,3 +48,23 @@ Press Go to Form
 ```
 
 On the browser, simply pick a date or just type in a date you want the see the results for.
+You can see the report for the given date both on console and the browser
+
+
+## Tests
+
+### Selenium e2e
+To be able to run the selenium e2e test on test_flask_app.py, chromedriver should be installed from [here](https://chromedriver.chromium.org/downloads).
+
+"ChromeDriver 88.0.4324.96" was used for this task but please check your chrome version before installing one.
+
+Simply place the chromedriver on the project directory and run the test with below command.
+```
+python test_flask_app.py
+```
+
+### unittest
+Please run the command below to see the unit tests.
+```
+python test_data_handler.py
+```
