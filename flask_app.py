@@ -21,7 +21,7 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 @app.route('/')
 def home():
-    return "<h1>Assessment</h1>"
+    return render_template("index.html")
 
 @app.route('/form', methods = ["POST", "GET"])
 def form():
@@ -30,6 +30,9 @@ def form():
         response_dict = hd.generate_dict()
 
         date_info_str = request.form["datepicker"]      # Datepicker Returned Date String Object
+        if date_info_str == "":
+            warning = "Please Enter a Value Before Clicking on Submit Button!!"
+            return render_template("dateform.html", warning=warning)
 
         date_info_dt = datetime.strptime(date_info_str, "%Y-%m-%d").date()      # Datepicker Returned Date String Object formatted to Date Object    
 
@@ -57,13 +60,16 @@ def form():
         
         # Find the count of customers
         df_orders['created_at'] = pd.to_datetime(df_orders['created_at'])
-        
         df_orders_betw_dt = df_orders[(df_orders['created_at'] >= date_info_dt_min) & (df_orders['created_at'] <= date_info_dt_max)]
-
+        
         count_of_customers = df_orders_betw_dt.shape[0]
 
         # Find the total discounted amount, the total number of items, the average order total
-        df_merged_order_lines_order = pd.merge(df_orders, df_order_lines, left_on="id", right_on="order_id", how="outer")       # Joined order_lines.csv with orders.csv
+        df_merged_order_lines_order = pd.merge(df_orders_betw_dt, df_order_lines, left_on="id", right_on="order_id", how="left")       # Joined order_lines.csv with orders.csv
+        
+        print(df_merged_order_lines_order.columns)
+
+        # print(df_merged_order_lines_order.head(30))
 
         total_discount_amount = df_merged_order_lines_order["discounted_amount"].sum()
         total_number_of_items = df_merged_order_lines_order["quantity"].sum()
@@ -72,6 +78,7 @@ def form():
         count_of_orders = df_merged_order_lines_order.shape[0]      # The number of orders
         avg_order_total = total_order_amount/count_of_orders        # Calculate the average order total by dividing total order amount to number of items ordered
 
+        
         # The discount rate is multiplied with quantity to find total discount rate applied
         df_merged_order_lines_order["discount_rates"] = df_merged_order_lines_order["discount_rate"] * df_merged_order_lines_order["quantity"]
 
@@ -80,37 +87,42 @@ def form():
         discount_rate_avg = total_discount_rate/total_number_of_items
 
         # The orders dataframe and the commissions dataframe date values are transformed to be able to join successfuly
-        df_orders["created_at"] = pd.to_datetime(df_orders['created_at'])
-        df_orders["created_at"] = df_orders["created_at"].dt.date
-        
+
+        # df_orders["created_at"] = pd.to_datetime(df_orders['created_at'])
+        # df_orders["created_at"] = df_orders["created_at"].dt.date
+        df_orders_betw_dt["created_at"] = df_orders_betw_dt["created_at"].dt.date
+
         df_commissions["date"] = pd.to_datetime(df_commissions["date"])
         df_commissions["date"] = df_commissions["date"].dt.date
 
+        df_commisions_on_dt = df_commissions[df_commissions['date'] == date_info_dt]
+
         # Join the orders dataframe and the commissions dataframe
-        df_orders_commisions = pd.merge(df_orders, df_commissions, left_on=['created_at','vendor_id'], right_on=['date','vendor_id'], how="outer")
+        df_orders_commisions_dt = pd.merge(df_orders_betw_dt, df_commisions_on_dt, left_on=['created_at','vendor_id'], right_on=['date','vendor_id'], how="left")
 
         # Join the orders commissions joined dataframe with the order lines dataframe
-        df_orders_commisions_order_lines = pd.merge(df_orders_commisions, df_order_lines, left_on="id", right_on="order_id", how="outer")
+        df_orders_commisions_dt_order_lines = pd.merge(df_orders_commisions_dt, df_order_lines, left_on="id", right_on="order_id", how="left")
 
         # Total amount of commissions found by multiplying full price amount column with commision rate applied
-        df_orders_commisions_order_lines["total_amount_commisions"] = df_orders_commisions_order_lines["rate"] * df_orders_commisions_order_lines["full_price_amount"]
-        total_amount_commisions = df_orders_commisions_order_lines["total_amount_commisions"].sum()
+        df_orders_commisions_dt_order_lines["total_amount_commisions"] = df_orders_commisions_dt_order_lines["rate"] * df_orders_commisions_dt_order_lines["full_price_amount"]
+        total_amount_commisions = df_orders_commisions_dt_order_lines["total_amount_commisions"].sum()
+
 
         # Average amount of commissions found by dividing the total amount of commissions with the number of orders
         aver_amount_of_comms_per_order = total_amount_commisions/count_of_orders
 
         # Join the orders commissions order lines joined dataframe with the product promotions dataframe
-        df_orders_commisions_order_lines_product_promotions = pd.merge(df_orders_commisions_order_lines,df_product_promotions,on="product_id",how="outer")
+        df_orders_commisions_dt_order_lines_product_promotions = pd.merge(df_orders_commisions_dt_order_lines,df_product_promotions,on="product_id",how="left")
 
         promotions_dict = {}        # Empty dictionary initialized to store promotion types as key values and total amount per promotion type
 
         # Found unique values of the promotion_id column of joined data frame to obtain which promotions were applied and cleaned nan values
-        promotion_list = df_orders_commisions_order_lines_product_promotions["promotion_id"].unique().tolist()
+        promotion_list = df_orders_commisions_dt_order_lines_product_promotions["promotion_id"].unique().tolist()
         promotion_list = [int(prom) for prom in promotion_list if str(prom) != "nan"]
 
         # Find the total amount per promotion type
         for prom in promotion_list:
-            df_promotion_total_amount_calc = df_orders_commisions_order_lines_product_promotions[df_orders_commisions_order_lines_product_promotions["promotion_id"] == float(prom)]
+            df_promotion_total_amount_calc = df_orders_commisions_dt_order_lines_product_promotions[df_orders_commisions_dt_order_lines_product_promotions["promotion_id"] == float(prom)]
             df_promotion_total_amount_calc["promotion_total_amount"] = df_promotion_total_amount_calc["rate"] * df_promotion_total_amount_calc["full_price_amount"]
             promotions_dict[str(prom)] = round(df_promotion_total_amount_calc["promotion_total_amount"].sum(), 2)
 
